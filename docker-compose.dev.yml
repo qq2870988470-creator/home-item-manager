@@ -1,0 +1,11 @@
+# Optional Mac development override. Production uses only docker-compose.yml.
+services:
+  backend:
+    environment:
+      ROOT_PATH: ""
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend/app:/app/app:ro
+      - ./backend/alembic:/app/alembic:ro
+    command: [sh, -c, "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]

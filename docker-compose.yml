@@ -1,0 +1,73 @@
+name: home-item-manager
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+    volumes:
+      - ${DATA_ROOT:-./data}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: [redis-server, --appendonly, 'yes', --appendfsync, everysec, --requirepass, '${REDIS_PASSWORD:?required}']
+    volumes:
+      - ${DATA_ROOT:-./data}/redis:/data
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:?required}
+      APP_ENV: ${APP_ENV:-production}
+      ROOT_PATH: /api
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      BACKUP_DIR: /app/backups
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
+      CACHE_TTL: ${CACHE_TTL:-600}
+      IMAGE_DIR: /app/storage/images
+    volumes:
+      - ${STORAGE_ROOT:-./storage}/images:/app/storage/images
+      - ${DATA_ROOT:-./data}/backups:/app/backups:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://localhost:8000/health", timeout=3)']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:80'
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1/]
+      interval: 15s
+      timeout: 5s
+      retries: 5
