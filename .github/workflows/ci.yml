@@ -1,0 +1,49 @@
+name: Test and Docker persistence
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r backend/requirements-dev.txt
+      - run: pytest -q tests
+  docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure disposable CI data
+        run: |
+          cp .env.example .env
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import secrets
+          p=Path('.env')
+          s=p.read_text().replace('POSTGRES_PASSWORD=change_me', 'POSTGRES_PASSWORD='+secrets.token_hex(24))
+          s=s.replace('REDIS_PASSWORD=change_me_redis', 'REDIS_PASSWORD='+secrets.token_hex(24))
+          p.write_text(s)
+          PYCODE
+      - run: bash scripts/init.sh
+      - run: bash scripts/self-check.sh
+      - name: Exercise restore confirmation on disposable CI database
+        run: |
+          backup=$(find data/backups -mindepth 1 -maxdepth 1 -type d -name '20*T*Z-*' | sort | tail -1)
+          printf 'CANCEL\n' | bash scripts/restore.sh "$backup"
+          printf 'RESTORE\n' | bash scripts/restore.sh "$backup"
+          docker compose up -d --wait
+          docker compose exec -T backend python -c 'import json,urllib.request; assert json.load(urllib.request.urlopen("http://localhost:8000/health"))["postgres"]'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Stop CI containers
+        if: always()
+        run: docker compose down
