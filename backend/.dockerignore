@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.venv
+**/.venv
+__pycache__
+**/__pycache__
+.git
+.env
+.env.*
+data
+storage/images
+dist
+**/dist
+.pytest_cache
