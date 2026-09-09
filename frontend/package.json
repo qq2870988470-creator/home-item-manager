@@ -1,0 +1,22 @@
+{
+  "name": "home-item-manager",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "7.6.2"
+  },
+  "devDependencies": {
+    "vite": "6.3.5"
+  },
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.13"
+  }
+}
